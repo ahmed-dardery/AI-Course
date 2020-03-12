@@ -1,42 +1,42 @@
+processes([p1,p2,p3,p4]).
+
+available_resources([[r1, 0], [r2, 0]]).
+
+allocated(p1, [r2]).
+allocated(p2, [r1]).
+allocated(p3, [r1]).
+allocated(p4, [r2]).
+
+requested(p1, [r1]).
+requested(p3, [r2]).
+
 % Counts number of processes in system:
-processCnt(N):-processes(List), processCnt(List, N).
-processCnt([],0).
-processCnt([_|L],N) :- processCnt(L,N1), N is N1 + 1.
+processCnt(N):-processes(List), processCnt(List, N, 0).
+processCnt([],N,N).
+processCnt([_|L],N,NB) :- NN is NB + 1, processCnt(L,N,NN).
 
 % Same as allocated and requested but instead of returning false, they return an empty list
 findRequest(X,Y):- (requested(X,Y), !); Y = [].
 findAlloc(X,Y):- (allocated(X,Y), !); Y = [].
 
-% satisfy(RequestList, SystemResources) : returns true if the available resources are sufficient to fullfill the request list.
-satisfy([], _).
-satisfy([Req|Leftover], Resources):-
-    member([Req, Val],Resources),!,
-    Val > 0,
-    NVal is Val - 1,
+satisfy_or_release([],R,R,_).
+satisfy_or_release([Req|Leftover], Resources, NewResources, INC):-
+    member([Req, Val], Resources),!,
+    NVal is Val + INC,
+    NVal >= 0,
     delete(Resources, [Req, Val], Temp),
     append(Temp, [[Req, NVal]], TempResources),
-    satisfy(Leftover, TempResources).
-
-% release(AllocationList, SystemResources, NewSystemResources) : adds the allocation list to the system resources.
-release([], R, R).
-release([Alloc|Leftover], Resources, NewResources):-
-    member([Alloc, Val], Resources),!,
-    NVal is Val + 1,
-    delete(Resources, [Alloc, Val], Temp),
-    append(Temp, [[Alloc, NVal]], TempResources),
-    release(Leftover,TempResources, NewResources).
+    satisfy_or_release(Leftover,TempResources, NewResources, INC).
 
 % attempts to satisfy any process, and release any resources that satisfied process used to have.
-generateOrder(Sys, Res, Order):-
-    processCnt(N),
-    generateOrder(Sys, Res, Order, 0, [], N).
-
 generateOrder([], _, Order, _, Order,_):-!.
 %branch if this process can be satisfied, in this case, release the appropriate resources,
 %push to the outorder, and reset the counter.
-generateOrder([[P, Alloc, Req]|Leftover], Resources, OutOrder, _, BuildOrder, Cnt):-
-    satisfy(Req, Resources),!,
-    release(Alloc, Resources, NewResources),
+generateOrder([P|Leftover], Resources, OutOrder, _, BuildOrder, Cnt):-
+    findRequest(P, Req),
+    satisfy_or_release(Req, Resources,_,-1),!,
+    findAlloc(P, Alloc),
+    satisfy_or_release(Alloc, Resources, NewResources,1),
     NSkips is 0,
     append(BuildOrder,[P],NewOutOrder),
     generateOrder(Leftover,NewResources,OutOrder, NSkips, NewOutOrder, Cnt).
@@ -49,23 +49,8 @@ generateOrder([Head|Tail], Resources, OutOrder, Skips, BuildOrder, Cnt):-
     append(Tail,[Head],NewList),
     generateOrder(NewList, Resources,OutOrder, NSkips, BuildOrder, Cnt).
     
-%System is a list of processes where each item is a pair of two lists, the first is the allocation, second is requested)
-getSystem(System):-
-    processes(Processes),
-    getSystem(Processes,System,[]).
-
-getSystem([], System, System).
-
-getSystem([Top | Leftover], System, Sys):-
-    findAlloc(Top, Alloc),
-    findRequest(Top, Req),
-    append(Sys,[[Top, Alloc, Req]],NewSys),
-    getSystem(Leftover, System, NewSys).
-
-getResources(Resources):-
-    available_resources(Resources).
-
 safe_state(Out):-
-     getSystem(Sys),
-     getResources(Res),
-     generateOrder(Sys, Res, Out).
+    processes(Procs),
+    available_resources(Res),
+    processCnt(N),
+    generateOrder(Procs, Res, Out, 0, [], N).
