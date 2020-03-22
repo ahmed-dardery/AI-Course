@@ -60,7 +60,7 @@ appendNewStateMove(Missionaries,Devils,NMissionaries,NDevils,Moves,NMoves):-
     append(Moves,[[MissionariesChange,DevilsChange]],NMoves).
     
 
-solve(3,3,0,0,_,_,Moves,Moves).
+solve(3,3,0,0,_,_,Moves,Moves):-!.
 
 solve(LeftMissionaries,LeftDevils,RightMissionaries,RightDevils,boatInLeft,Vis,Moves,FinalMoves):-
     hashState(LeftMissionaries,LeftDevils,RightMissionaries,RightDevils,Hash,1), \+ member(Hash, Vis), append(Vis,[Hash],NVis),
